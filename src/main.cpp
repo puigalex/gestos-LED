@@ -1,52 +1,41 @@
 #include <Seeed_Arduino_SSCMA.h>
+#include <WiFi.h>
 #include <HTTPClient.h>
-
-void sendRequestToWLED(int number, int ip) {
-    HTTPClient http;
-    // Select a preset light pattern depending on the value received (0-2)
-
-    // 0: Rainbow
-    // 1: Fire
-    // 2: Police
-
-    String url = "http://192.168.1." + String(ip) + "/win&FX=" + String(number);
-    http.begin(url);
-    int httpCode = http.GET();
-    if (httpCode > 0) {
-        Serial.printf("[HTTP] GET... code: %d\n", httpCode);
-        if (httpCode == HTTP_CODE_OK) {
-            String payload = http.getString();
-            Serial.println(payload);
-        }
-    } else {
-        Serial.printf("[HTTP] GET... failed, error: %s\n", http.errorToString(httpCode).c_str());
-    }
-    http.end();
-    
-}
 
 SSCMA AI;
 
-void setup()
-{
+const char* ssid = "nombre_red"; 
+const char* password = "pw_red"; 
+const char* wled_ip = "ip_wled"; 
+int preset=0;
+
+void sendWledPreset(int preset); 
+
+void setup() {
     AI.begin();
     Serial.begin(9600);
+
+
+    // Connect to Wi-Fi
+    WiFi.begin(ssid, password);
+    while (WiFi.status() != WL_CONNECTED) {
+        delay(1000);
+        Serial.println("Conectando a la red WiFi...");
+    }
+    Serial.println("Conectado");
 }
 
-void loop()
-{
-    if (!AI.invoke())
-    {
+void loop() {
+    if (!AI.invoke()) {
         Serial.println("invoke success");
-        Serial.print("perf: prepocess=");
+        Serial.print("perf: preprocess=");
         Serial.print(AI.perf().prepocess);
         Serial.print(", inference=");
         Serial.print(AI.perf().inference);
-        Serial.print(", postpocess=");
+        Serial.print(", postprocess=");
         Serial.println(AI.perf().postprocess);
 
-        for (int i = 0; i < AI.boxes().size(); i++)
-        {
+        for (int i = 0; i < AI.boxes().size(); i++) {
             Serial.print("Box[");
             Serial.print(i);
             Serial.print("] target=");
@@ -61,9 +50,12 @@ void loop()
             Serial.print(AI.boxes()[i].w);
             Serial.print(", h=");
             Serial.println(AI.boxes()[i].h);
+            if (AI.boxes()[0].score > 0.2){
+                preset = AI.boxes()[0].target;
+                break;
+                }
         }
-        for (int i = 0; i < AI.classes().size(); i++)
-        {
+        for (int i = 0; i < AI.classes().size(); i++) {
             Serial.print("Class[");
             Serial.print(i);
             Serial.print("] target=");
@@ -71,8 +63,7 @@ void loop()
             Serial.print(", score=");
             Serial.println(AI.classes()[i].score);
         }
-        for (int i = 0; i < AI.points().size(); i++)
-        {
+        for (int i = 0; i < AI.points().size(); i++) {
             Serial.print("Point[");
             Serial.print(i);
             Serial.print("] target=");
@@ -85,5 +76,27 @@ void loop()
             Serial.println(AI.points()[i].y);
         }
 
+
+        sendWledPreset(preset+1); 
+    }
+}
+
+void sendWledPreset(int preset) {
+    if (WiFi.status() == WL_CONNECTED) {
+        HTTPClient http;
+        String url = "http://" + String(wled_ip) + "/win&PL=" + String(preset);
+        http.begin(url);
+        int httpResponseCode = http.GET();
+        if (httpResponseCode > 0) {
+            String response = http.getString();
+            //Serial.println(httpResponseCode);
+            //Serial.println(response);
+        } else {
+            Serial.print("Error al enviar GET: ");
+            Serial.println(httpResponseCode);
+        }
+        http.end();
+    } else {
+        Serial.println("No WiFi");
     }
 }
